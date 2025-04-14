@@ -1,0 +1,11 @@
+# depslib dependency file v1.0
+1744624177 source:c:\users\ardam\onedrive\desktop\ödev\file_dialog\main.cpp
+	<windows.h>
+	<commdlg.h>
+	<iostream>
+
+1744626269 source:c:\users\ardam\onedrive\desktop\hw1\project\file_dialog\main.cpp
+	<windows.h>
+	<commdlg.h>
+	<iostream>
+
