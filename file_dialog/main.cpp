@@ -179,7 +179,7 @@ std::vector<bool> create_checksum_frame(std::vector<std::vector<bool>>& frames){
     frame.insert(frame.end(), header.begin(), header.end());
 
     for(i= 15; i>= 0; i--)
-        frame.push_back((checksum_ones_complement >> i) & 1);
+        frame.push_back((checksumComplement >> i) & 1);
 
     return frame;
 }
