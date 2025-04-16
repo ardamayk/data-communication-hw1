@@ -271,7 +271,7 @@ void transmission(const std::vector<std::vector<bool>>& frames, std::vector<bool
         //std::cout << "Received: " << receivedChecksumValue << "\n";
         uint16_t computedChecksum = compute_checksum(framesCopy);
         uint32_t total = computedChecksum + receivedChecksumValue;
-        std::cout << "Total: " << total << "\n";
+        //std::cout << "Total: " << total << "\n";
         if((total & 0xFFFF) == 0xFFFF){
             std::cout << "Alici: Gonderilen checksum dogru. Gonderim tamamlandi.\n";
             checksumSent = true;
