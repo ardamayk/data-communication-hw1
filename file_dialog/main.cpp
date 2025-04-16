@@ -7,6 +7,7 @@
 #include <vector>        // Dinamik diziler (vector) için gerekli başlık dosyası
 #include <cstdio>        // C tarzı giriş/çıkış fonksiyonları için gerekli başlık dosyası (printf gibi)
 
+
 // Belirtilen dosya yolundaki dosyayı okur, içeriğini bitlere ayırır ve her biri en fazla 100 bitlik parçalar halinde bir vektör içinde saklar.
 std::vector<std::vector<bool>> parcala_ve_kaydet(const std::string& dosya_yolu);
 
@@ -113,13 +114,80 @@ std::vector<std::vector<bool>> parcala_ve_kaydet(const std::string& dosya_yolu) 
             // Bit dizisindeki ilgili biti mevcut parçaya ekler.
             parca.push_back(bit_dizisi[j]);
         }
-        // Oluşturulan 100 bitlik parçayı (vektörü) sonuç matrisine ekler.
+        std::vector<bool> crc = compute_crc16(parca);
+        parca.insert(parca.end(), crc.begin(), crc.end());
+
+
+        // Oluşturulan parçayı (vektörü) sonuç matrisine ekler.
         matris.push_back(parca);
     }
 
-    // Oluşturulan 100 bitlik parçaların bulunduğu matrisi döndürür.
+    // Oluşturulan parçaların bulunduğu matrisi döndürür.
     return matris;
 }
+// hata olasılıkları
+bool simulate_frame_loss()    { return rand() % 100 < 10; }
+bool simulate_frame_corrupt() { return rand() % 100 < 20; }
+bool simulate_ack_loss()      { return rand() % 100 < 15; }
+bool simulate_checksum_error(){ return rand() % 100 < 5; }
+
+std::vector<bool> compute_crc16(std::vector<bool>& bits){
+    const uint16_t polynomial = 0x1021;
+    uint16_t crc = 0xFFFF; //initial value for crc
+    bool msb;
+    int i;
+    for(bool bit: bits){
+        msb = (crc & 0x8000) != 0; // get the msb
+        crc <<= 1;
+        crc |= bit;
+        if(msb) {
+            crc ^= polynomial;
+        }
+    }
+    std::vector<bool> crcVector;
+    for(i=15; i>=0; i--)
+        crcVector.push_back((crc >> i) & 1);
+    return crcVector;
+}
+
+
+uint16_t compute_checksum(const std::vector<std::vector<bool>>& frames){
+    uint32_t sum = 0;
+    uint16_t crc, checksum;
+    int i;
+    for(const auto& frame: frames){
+        crc = 0;
+        for(i = frame.size() - 16; i < frame.size(); i++){
+            crc = (crc << 1) | frame[i];
+        }
+        sum += crc;
+    }
+    sum += 1;
+    return static_cast<uint16_t>(sum);
+}
+
+std::vector<bool> create_checksum_frame(std::vector<std::vector<bool>>& frames){
+    uint16_t checksum;
+    uint16_t checksumComplement;
+    int i;
+
+    checksum = compute_checksum(frames);
+    checksumComplement = ~checksum;
+
+    std::vector<bool> frame;
+    std::vector<bool> header = {1, 0, 1, 0}; // Example 4-bit header for transparency
+    frame.insert(frame.end(), header.begin(), header.end());
+
+    for(i= 15; i>= 0; i--)
+        frame.push_back((checksum_ones_complement >> i) & 1);
+
+    return frame;
+}
+
+
+
+
+
 
 
 
