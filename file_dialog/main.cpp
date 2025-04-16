@@ -10,6 +10,13 @@
 
 // Belirtilen dosya yolundaki dosyayı okur, içeriğini bitlere ayırır ve her biri en fazla 100 bitlik parçalar halinde bir vektör içinde saklar.
 std::vector<std::vector<bool>> parcala_ve_kaydet(const std::string& dosya_yolu);
+bool simulate_frame_loss();
+bool simulate_frame_corrupt();
+bool simulate_ack_loss();
+bool simulate_checksum_error();
+std::vector<bool> compute_crc16(std::vector<bool>& bits);
+uint16_t compute_checksum(const std::vector<std::vector<bool>>& frames);
+std::vector<bool> create_checksum_frame(std::vector<std::vector<bool>>& frames);
 
 int main()
 {
@@ -52,6 +59,11 @@ int main()
         }
         printf("\n"); // Bir sonraki parça için yeni bir satıra geçer.
     }
+    std::vector<bool> checksumFrame = create_checksum_frame(sonuc); // create the checksum frame
+    std::cout << "Checksum parcasi: ";
+    for(bool bit: checksumFrame)
+        std::cout << bit;
+    std::cout << std::endl;
 
     return 0; // Programın başarıyla sonlandığını belirtir.
 }
@@ -153,8 +165,8 @@ std::vector<bool> compute_crc16(std::vector<bool>& bits){
 
 uint16_t compute_checksum(const std::vector<std::vector<bool>>& frames){
     uint32_t sum = 0;
-    uint16_t crc, checksum;
-    int i;
+    uint16_t crc;
+    size_t i;
     for(const auto& frame: frames){
         crc = 0;
         for(i = frame.size() - 16; i < frame.size(); i++){
