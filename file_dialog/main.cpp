@@ -20,6 +20,11 @@ std::vector<bool> create_checksum_frame(std::vector<std::vector<bool>>& frames);
 
 int main()
 {
+    srand(time(0));
+    /*std::cout << (rand() % 100) << std::endl;
+    std::cout << (rand() % 100) << std::endl;
+    std::cout << (rand() % 100) << std::endl; */
+
     OPENFILENAME ofn;         // Dosya açma diyalog kutusunun özelliklerini tutan yapı
     char szFile[260] = { 0 }; // Seçilen dosyanın tam yolunu saklamak için ayrılmış karakter dizisi (260 karakter maksimum)
 
