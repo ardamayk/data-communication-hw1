@@ -7,11 +7,26 @@
 #include <vector>        // Dinamik diziler (vector) için gerekli başlık dosyası
 #include <cstdio>        // C tarzı giriş/çıkış fonksiyonları için gerekli başlık dosyası (printf gibi)
 
+
 // Belirtilen dosya yolundaki dosyayı okur, içeriğini bitlere ayırır ve her biri en fazla 100 bitlik parçalar halinde bir vektör içinde saklar.
 std::vector<std::vector<bool>> parcala_ve_kaydet(const std::string& dosya_yolu);
+bool simulate_frame_loss();
+bool simulate_frame_corrupt();
+bool simulate_ack_loss();
+bool simulate_checksum_error();
+std::vector<bool> compute_crc16(std::vector<bool>& bits);
+uint16_t compute_checksum(const std::vector<std::vector<bool>>& frames);
+std::vector<bool> create_checksum_frame(std::vector<std::vector<bool>>& frames);
+void transmission(const std::vector<std::vector<bool>>& frames, std::vector<bool>& checksumFrame);
+bool assure_crc(std::vector<bool>& frame);
 
 int main()
 {
+    srand(time(0));
+    /*std::cout << (rand() % 100) << std::endl;
+    std::cout << (rand() % 100) << std::endl;
+    std::cout << (rand() % 100) << std::endl; */
+
     OPENFILENAME ofn;         // Dosya açma diyalog kutusunun özelliklerini tutan yapı
     char szFile[260] = { 0 }; // Seçilen dosyanın tam yolunu saklamak için ayrılmış karakter dizisi (260 karakter maksimum)
 
@@ -51,6 +66,13 @@ int main()
         }
         printf("\n"); // Bir sonraki parça için yeni bir satıra geçer.
     }
+    std::vector<bool> checksumFrame = create_checksum_frame(sonuc); // create the checksum frame
+    std::cout << "Checksum parcasi: ";
+    for(bool bit: checksumFrame)
+        std::cout << bit;
+    std::cout << std::endl;
+
+    transmission(sonuc, checksumFrame);
 
     return 0; // Programın başarıyla sonlandığını belirtir.
 }
@@ -113,13 +135,166 @@ std::vector<std::vector<bool>> parcala_ve_kaydet(const std::string& dosya_yolu) 
             // Bit dizisindeki ilgili biti mevcut parçaya ekler.
             parca.push_back(bit_dizisi[j]);
         }
-        // Oluşturulan 100 bitlik parçayı (vektörü) sonuç matrisine ekler.
+        std::vector<bool> crc = compute_crc16(parca);
+        parca.insert(parca.end(), crc.begin(), crc.end());
+
+
+        // Oluşturulan parçayı (vektörü) sonuç matrisine ekler.
         matris.push_back(parca);
     }
 
-    // Oluşturulan 100 bitlik parçaların bulunduğu matrisi döndürür.
+    // Oluşturulan parçaların bulunduğu matrisi döndürür.
     return matris;
 }
+// hata olasılıkları
+bool simulate_frame_loss()    { return rand() % 100 < 10; }
+bool simulate_frame_corrupt() { return rand() % 100 < 20; }
+bool simulate_ack_loss()      { return rand() % 100 < 15; }
+bool simulate_checksum_error(){ return rand() % 100 < 5; }
+
+std::vector<bool> compute_crc16(std::vector<bool>& bits){
+    const uint16_t polynomial = 0x1021;
+    uint16_t crc = 0xFFFF; //initial value for crc
+    bool msb;
+    int i;
+    for(bool bit: bits){
+        msb = (crc & 0x8000) != 0; // get the msb
+        crc <<= 1;
+        crc |= bit;
+        if(msb) {
+            crc ^= polynomial;
+        }
+    }
+    std::vector<bool> crcVector;
+    for(i=15; i>=0; i--)
+        crcVector.push_back((crc >> i) & 1);
+    return crcVector;
+}
+
+
+uint16_t compute_checksum(const std::vector<std::vector<bool>>& frames){
+    uint32_t sum = 0;
+    uint16_t crc;
+    size_t i;
+    for(const auto& frame: frames){
+        crc = 0;
+        for(i = frame.size() - 16; i < frame.size(); i++){
+            crc = (crc << 1) | frame[i];
+        }
+        sum += crc;
+    }
+    //std::cout << "Computed checksum: " << sum << "\n";
+    return static_cast<uint16_t>(sum);
+}
+
+std::vector<bool> create_checksum_frame(std::vector<std::vector<bool>>& frames){
+    uint16_t checksum;
+    uint16_t checksumComplement;
+    int i;
+
+    checksum = compute_checksum(frames);
+    checksumComplement = ~checksum;
+    checksumComplement++;
+
+    std::vector<bool> frame;
+    std::vector<bool> header = {1, 0, 1, 0}; // Example 4-bit header for transparency
+    frame.insert(frame.end(), header.begin(), header.end());
+
+    for(i= 15; i>= 0; i--)
+        frame.push_back((checksumComplement >> i) & 1);
+
+    return frame;
+}
+
+void transmission(const std::vector<std::vector<bool>>& frames, std::vector<bool>& checksumFrame){
+    std::cout << "\n\n---Veri iletisimi basladi...---\n\n";
+    std::vector<std::vector<bool>> framesCopy = frames;
+    int totalFrames = framesCopy.size(), currentFrame = 0, corruptedIndex;
+    bool expectedAck = true, ackSent;
+    while(currentFrame < totalFrames){
+        std::cout << "Gonderici: Frame " << currentFrame << " gonderiliyor. ";
+        if(simulate_ack_loss()){ // frame yolda kayboldu ise
+            ackSent = !expectedAck;
+            std::cout << "Alici: Frame " << currentFrame << " yolda kayboldu. Gonderilecek ACK: " << (!ackSent) << "\n";
+        }
+        else { // frame yolda kaybolmadı, başarılı bir şekilde iletildi
+            std::cout << "Alici: Frame " << currentFrame << " teslim alindi.\n";
+            std::vector<bool> receivedFrame = framesCopy[currentFrame];
+            if(simulate_frame_corrupt()) { // frame bozulduysa
+                corruptedIndex = rand() % receivedFrame.size();
+                receivedFrame[corruptedIndex] = !receivedFrame[corruptedIndex]; // bozulmasına karar verilen indexteki bit ters çevirilir
+
+            }
+            if(assure_crc(receivedFrame)){ // crc is the same
+                ackSent = expectedAck;
+                std::cout << "Alici: Frame " << currentFrame << " dogru alindi. Gonderilecek ACK: " << (ackSent) << "\n";
+            }
+            else { // crc different
+                ackSent = !expectedAck;
+                std::cout << "Alici: Frame " << currentFrame << " hatali geldi. Gonderilecek ACK: " << (!ackSent) << "\n";
+                //receivedFrame[corruptedIndex] = !receivedFrame[corruptedIndex];
+            }
+        }
+
+        if(simulate_ack_loss()){ //ack lost on the way
+            std::cout << "ACK yolda kayboldu. Frame " << currentFrame << " tekrar gonderilecek.\n";
+        }
+        else {
+            std::cout << "ACK gondericiye iletildi. Iletilen ACK: " << ackSent << "\n";
+            if(expectedAck != ackSent) { // beklenen ack gelmedi, demek ki hata olmuş
+                std::cout << "Gonderici: Frame " << currentFrame << " gonderilirken bir hata olusmus. Frame tekrar gonderiliyor...\n";
+            }
+            else { // beklenen ack geldi, demek ki bir sorun yok
+                std::cout << "Gonderici: Frame " << currentFrame << " basarili bir sekilde gonderilmis. Siradaki frame'e geciliyor...\n\n";
+                expectedAck = !expectedAck;
+                currentFrame++;
+            }
+        }
+
+    }
+
+    std::cout << "Tum frameler basariyla gonderildi. Checksum frame'i gonderiliyor...\n\n";
+    boolean checksumSent = false;
+    while(!checksumSent){
+        std::cout << "Gonderici: Checksum gonderiliyor...\n";
+        std::vector<bool> checksumCopy = checksumFrame;
+        /*if(simulate_checksum_error()){
+            int checksumCorruptedIndex = rand() % checksumCopy.size();
+            checksumCopy[checksumCorruptedIndex] = !checksumCopy[checksumCorruptedIndex];
+        }*/
+        std::vector<bool> receivedChecksum(checksumCopy.begin() + 4, checksumCopy.end());
+        uint16_t receivedChecksumValue = 0;
+        for(bool bit: receivedChecksum){
+            receivedChecksumValue = (receivedChecksumValue << 1) | bit;
+        }
+
+        //std::cout << "Received: " << receivedChecksumValue << "\n";
+        uint16_t computedChecksum = compute_checksum(framesCopy);
+        uint32_t total = computedChecksum + receivedChecksumValue;
+        //std::cout << "Total: " << total << "\n";
+        if((total & 0xFFFF) == 0x0000){
+            std::cout << "Alici: Gonderilen checksum dogru. Gonderim tamamlandi.\n";
+            checksumSent = true;
+        }
+        else {
+            std::cout << "Alici: Checksum hatali. Tekrar gonderim yapilacak...\n";
+            std::cout << "Received checksum: " << receivedChecksumValue << " --- computed checksum: " << computedChecksum << "Total: " << total << "\n";
+        }
+    }
+
+
+}
+
+bool assure_crc(std::vector<bool>& frame){
+    std::vector<bool> data(frame.begin(), frame.end() - 16);
+    std::vector<bool> receivedCrc(frame.end() - 16, frame.end());
+    std::vector<bool> calculatedCrc = compute_crc16(data);
+    return (calculatedCrc == receivedCrc);
+}
+
+
+
+
 
 
 
