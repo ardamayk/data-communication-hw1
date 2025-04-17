@@ -183,7 +183,6 @@ uint16_t compute_checksum(const std::vector<std::vector<bool>>& frames){
         }
         sum += crc;
     }
-    sum += 1;
     //std::cout << "Computed checksum: " << sum << "\n";
     return static_cast<uint16_t>(sum);
 }
@@ -195,6 +194,7 @@ std::vector<bool> create_checksum_frame(std::vector<std::vector<bool>>& frames){
 
     checksum = compute_checksum(frames);
     checksumComplement = ~checksum;
+    checksumComplement++;
 
     std::vector<bool> frame;
     std::vector<bool> header = {1, 0, 1, 0}; // Example 4-bit header for transparency
@@ -272,7 +272,7 @@ void transmission(const std::vector<std::vector<bool>>& frames, std::vector<bool
         uint16_t computedChecksum = compute_checksum(framesCopy);
         uint32_t total = computedChecksum + receivedChecksumValue;
         //std::cout << "Total: " << total << "\n";
-        if((total & 0xFFFF) == 0xFFFF){
+        if((total & 0xFFFF) == 0x0000){
             std::cout << "Alici: Gonderilen checksum dogru. Gonderim tamamlandi.\n";
             checksumSent = true;
         }
