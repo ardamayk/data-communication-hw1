@@ -11,6 +11,14 @@ qt_add_executable(viba
     mainwindow.cpp
     mainwindow.h
     mainwindow.ui
+
+
+
+
+
+
+
+
 )
 
 target_link_libraries(viba

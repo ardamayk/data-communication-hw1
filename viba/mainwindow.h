@@ -23,6 +23,8 @@ class MainWindow : public QMainWindow
 public:
     MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
+    std::vector<std::vector<bool>> parcala_ve_kaydet(const std::string& dosya_yolu);
+
 
 private slots:
     void on_btnSelectFile_clicked();
@@ -31,12 +33,12 @@ private slots:
     void on_simulationStep();
 
 private:
-    std::vector<std::vector<bool>> parcala_ve_kaydet(const std::string& dosya_yolu);
+
     void resetSimulation();
 
     QWidget *centralWidget;
     QVBoxLayout *mainLayout;
-
+    std::vector<std::vector<bool>> frameData;
     QPushButton *btnSelectFile;
     QLabel *lblFileName;
 
@@ -47,7 +49,9 @@ private:
     QPushButton *btnStartSim;
     QPushButton *btnPauseSim;
     QProgressBar *progressBar;
-    QTextEdit *txtLog;
+
+    QTextEdit *txtSenderLog;
+    QTextEdit *txtReceiverLog;
 
     QLabel *lblSender;
     QLabel *lblReceiver;
@@ -56,6 +60,7 @@ private:
     int currentFrameIndex;
     std::vector<QString> frameResults;
     bool isPaused;
+
 };
 
 #endif // MAINWINDOW_H

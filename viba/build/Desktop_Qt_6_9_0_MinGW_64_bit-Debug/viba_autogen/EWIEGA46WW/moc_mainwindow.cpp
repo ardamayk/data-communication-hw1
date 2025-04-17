@@ -44,7 +44,7 @@ template <> constexpr inline auto MainWindow::qt_create_metaobjectdata<qt_meta_t
         "",
         "on_btnStartSim_clicked",
         "on_btnPauseSim_clicked",
-        "on_simulationStep"
+        "runNextFrame"
     };
 
     QtMocHelpers::UintData qt_methods {
@@ -54,7 +54,7 @@ template <> constexpr inline auto MainWindow::qt_create_metaobjectdata<qt_meta_t
         QtMocHelpers::SlotData<void()>(3, 2, QMC::AccessPrivate, QMetaType::Void),
         // Slot 'on_btnPauseSim_clicked'
         QtMocHelpers::SlotData<void()>(4, 2, QMC::AccessPrivate, QMetaType::Void),
-        // Slot 'on_simulationStep'
+        // Slot 'runNextFrame'
         QtMocHelpers::SlotData<void()>(5, 2, QMC::AccessPrivate, QMetaType::Void),
     };
     QtMocHelpers::UintData qt_properties {
@@ -82,7 +82,7 @@ void MainWindow::qt_static_metacall(QObject *_o, QMetaObject::Call _c, int _id, 
         case 0: _t->on_btnSelectFile_clicked(); break;
         case 1: _t->on_btnStartSim_clicked(); break;
         case 2: _t->on_btnPauseSim_clicked(); break;
-        case 3: _t->on_simulationStep(); break;
+        case 3: _t->runNextFrame(); break;
         default: ;
         }
     }
