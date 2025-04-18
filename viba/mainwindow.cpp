@@ -92,6 +92,11 @@ MainWindow::MainWindow(QWidget *parent)
 
 MainWindow::~MainWindow() {}
 
+bool simulate_frame_loss()    { return rand() % 100 < 10; }
+bool simulate_frame_corrupt() { return rand() % 100 < 20; }
+bool simulate_ack_loss()      { return rand() % 100 < 15; }
+bool simulate_checksum_error(){ return rand() % 100 < 5; }
+
 std::vector<bool> compute_crc16(std::vector<bool>& bits){
     const uint16_t polynomial = 0x1021;
     uint16_t crc = 0xFFFF; //initial value for crc
@@ -109,6 +114,32 @@ std::vector<bool> compute_crc16(std::vector<bool>& bits){
     for(i=15; i>=0; i--)
         crcVector.push_back((crc >> i) & 1);
     return crcVector;
+}
+
+
+uint16_t compute_checksum(const std::vector<std::vector<bool>>& frames){
+    uint32_t sum = 0;
+    for(const auto& frame: frames){
+        uint16_t word = 0;
+        for(size_t i = frame.size() - 16; i < frame.size(); i++){
+            word = (word << 1) | frame[i];
+        }
+        sum += word;
+        if(sum > 0xFFFF){
+            sum = (sum & 0xFFFF) + (sum >> 16);
+        }
+    }
+    return static_cast<uint16_t>(sum);
+}
+
+
+
+
+bool assure_crc(std::vector<bool>& frame){
+    std::vector<bool> data(frame.begin(), frame.end() - 16);
+    std::vector<bool> receivedCrc(frame.end() - 16, frame.end());
+    std::vector<bool> calculatedCrc = compute_crc16(data);
+    return (calculatedCrc == receivedCrc);
 }
 
 std::vector<std::vector<bool>> MainWindow::parcala_ve_kaydet(const std::string& dosya_yolu)  {
@@ -176,114 +207,6 @@ std::vector<std::vector<bool>> MainWindow::parcala_ve_kaydet(const std::string& 
     return matris;
 }
 
-uint16_t compute_checksum(const std::vector<std::vector<bool>>& frames){
-    uint32_t sum = 0;
-    uint16_t crc;
-    size_t i;
-    for(const auto& frame: frames){
-        crc = 0;
-        for(i = frame.size() - 16; i < frame.size(); i++){
-            crc = (crc << 1) | frame[i];
-        }
-        sum += crc;
-    }
-    sum += 1;
-    //std::cout << "Computed checksum: " << sum << "\n";
-    return static_cast<uint16_t>(sum);
-}
-
-
-bool assure_crc(std::vector<bool>& frame){
-    std::vector<bool> data(frame.begin(), frame.end() - 16);
-    std::vector<bool> receivedCrc(frame.end() - 16, frame.end());
-    std::vector<bool> calculatedCrc = compute_crc16(data);
-    return (calculatedCrc == receivedCrc);
-}
-bool simulate_frame_loss()    { return rand() % 100 < 10; }
-bool simulate_frame_corrupt() { return rand() % 100 < 20; }
-bool simulate_ack_loss()      { return rand() % 100 < 15; }
-bool simulate_checksum_error(){ return rand() % 100 < 5; }
-void transmission(const std::vector<std::vector<bool>>& frames, std::vector<bool>& checksumFrame){
-    std::cout << "\n\n---Veri iletisimi basladi...---\n\n";
-    std::vector<std::vector<bool>> framesCopy = frames;
-    int totalFrames = framesCopy.size(), currentFrame = 0, corruptedIndex;
-    bool expectedAck = true, ackSent;
-    while(currentFrame < totalFrames){
-        std::cout << "Gonderici: Frame " << currentFrame << " gonderiliyor. ";
-        if(simulate_ack_loss()){ // frame yolda kayboldu ise
-            ackSent = !expectedAck;
-            std::cout << "Alici: Frame " << currentFrame << " yolda kayboldu. Gonderilecek ACK: " << (!ackSent) << "\n";
-        }
-        else { // frame yolda kaybolmadı, başarılı bir şekilde iletildi
-            std::cout << "Alici: Frame " << currentFrame << " teslim alindi.\n";
-            std::vector<bool> receivedFrame = framesCopy[currentFrame];
-            if(simulate_frame_corrupt()) { // frame bozulduysa
-                corruptedIndex = rand() % receivedFrame.size();
-                receivedFrame[corruptedIndex] = !receivedFrame[corruptedIndex]; // bozulmasına karar verilen indexteki bit ters çevirilir
-
-            }
-            if(assure_crc(receivedFrame)){ // crc is the same
-                ackSent = expectedAck;
-                std::cout << "Alici: Frame " << currentFrame << " dogru alindi. Gonderilecek ACK: " << (ackSent) << "\n";
-            }
-            else { // crc different
-                ackSent = !expectedAck;
-                std::cout << "Alici: Frame " << currentFrame << " hatali geldi. Gonderilecek ACK: " << (!ackSent) << "\n";
-                //receivedFrame[corruptedIndex] = !receivedFrame[corruptedIndex];
-            }
-        }
-
-        if(simulate_ack_loss()){ //ack lost on the way
-            std::cout << "ACK yolda kayboldu. Frame " << currentFrame << " tekrar gonderilecek.\n";
-        }
-        else {
-            std::cout << "ACK gondericiye iletildi. Iletilen ACK: " << ackSent << "\n";
-            if(expectedAck != ackSent) { // beklenen ack gelmedi, demek ki hata olmuş
-                std::cout << "Gonderici: Frame " << currentFrame << " gonderilirken bir hata olusmus. Frame tekrar gonderiliyor...\n";
-            }
-            else { // beklenen ack geldi, demek ki bir sorun yok
-                std::cout << "Gonderici: Frame " << currentFrame << " basarili bir sekilde gonderilmis. Siradaki frame'e geciliyor...\n\n";
-                expectedAck = !expectedAck;
-                currentFrame++;
-            }
-        }
-
-    }
-
-    std::cout << "Tum frameler basariyla gonderildi. Checksum frame'i gonderiliyor...\n\n";
-    bool checksumSent = false;
-    while(!checksumSent){
-        std::cout << "Gonderici: Checksum gonderiliyor...\n";
-        std::vector<bool> checksumCopy = checksumFrame;
-        /*if(simulate_checksum_error()){
-            int checksumCorruptedIndex = rand() % checksumCopy.size();
-            checksumCopy[checksumCorruptedIndex] = !checksumCopy[checksumCorruptedIndex];
-        }*/
-        std::vector<bool> receivedChecksum(checksumCopy.begin() + 4, checksumCopy.end());
-        uint16_t receivedChecksumValue = 0;
-        for(bool bit: receivedChecksum){
-            receivedChecksumValue = (receivedChecksumValue << 1) | bit;
-        }
-
-        //std::cout << "Received: " << receivedChecksumValue << "\n";
-        uint16_t computedChecksum = compute_checksum(framesCopy);
-        uint32_t total = computedChecksum + receivedChecksumValue;
-        //std::cout << "Total: " << total << "\n";
-        if((total & 0xFFFF) == 0xFFFF){
-            std::cout << "Alici: Gonderilen checksum dogru. Gonderim tamamlandi.\n";
-            checksumSent = true;
-        }
-        else {
-            std::cout << "Alici: Checksum hatali. Tekrar gonderim yapilacak...\n";
-            std::cout << "Received checksum: " << receivedChecksumValue << " --- computed checksum: " << computedChecksum << "Total: " << total << "\n";
-        }
-    }
-
-
-}
-
-
-
 
 uint16_t vector_to_uint16(const std::vector<bool>& vec) {
     uint16_t value = 0;
@@ -292,8 +215,6 @@ uint16_t vector_to_uint16(const std::vector<bool>& vec) {
     }
     return value;
 }
-
-
 
 
 void MainWindow::on_btnSelectFile_clicked() {
@@ -332,7 +253,7 @@ void MainWindow::on_btnSelectFile_clicked() {
 void MainWindow::on_btnStartSim_clicked() {
     txtSenderLog->append("[Simülasyon] Başlatıldı.");
     isPaused = false;
-    simTimer->start(500);
+    simTimer->start(50);
 }
 
 void MainWindow::on_btnPauseSim_clicked() {
@@ -342,45 +263,22 @@ void MainWindow::on_btnPauseSim_clicked() {
         txtSenderLog->append("[Simülasyon] Duraklatıldı.");
     } else {
         txtSenderLog->append("[Simülasyon] Devam Ediyor...");
-        simTimer->start(500);
+        simTimer->start(50);
     }
 }
 
 
 void MainWindow::on_simulationStep() {
+    if (currentFrameIndex >= listFrames->count()){
+        send_checksum();   \
+    }
+
     if (currentFrameIndex >= listFrames->count()) {
         simTimer->stop();
         txtSenderLog->append("[Simülasyon] Tamamlandı.");
         txtReceiverLog->append("[Simülasyon] Tüm frameler alındı.");
         return;
     }
-    /*
-    QString frameName = "Frame " + QString::number(currentFrameIndex + 1);
-    QString result;
-
-    if (simulate_frame_loss()) {
-        result = "Kayıp - Yeniden Gönderiliyor";
-    } else if (simulate_frame_corrupt()) {
-        result = "Bozuldu - Yeniden Gönderiliyor";
-    } else if (simulate_ack_loss()) {
-        result = "ACK Yok - Yeniden Gönderiliyor";
-    } else {
-        result = "Başarılı";
-    }
-
-    listFrames->item(currentFrameIndex)->setText(frameName + ": " + result);
-
-    if (result == "Başarılı") {
-        txtSenderLog->append("[" + frameName + "] Gönderildi.");
-        txtReceiverLog->append("[" + frameName + "] Başarıyla alındı.");
-        currentFrameIndex++;
-        int progress = static_cast<int>((currentFrameIndex / static_cast<double>(listFrames->count())) * 100);
-        progressBar->setValue(progress);
-    } else {
-        txtSenderLog->append("[" + frameName + "] Hata: " + result);
-        txtReceiverLog->append("[" + frameName + "] Bekleniyor...");
-    }
-    */
     std::cout << "\n\n---Veri iletisimi basladi...---\n\n";
     std::vector<std::vector<bool>> framesCopy = frameData;
     int totalFrames = framesCopy.size(), corruptedIndex;
@@ -432,6 +330,7 @@ void MainWindow::on_simulationStep() {
             else { // beklenen ack geldi, demek ki bir sorun yok
                 txtSenderLog->append("Frame " + QString::number(currentFrameIndex) + " basarili bir sekilde gonderilmis. Siradaki frame'e geciliyor...");
                 std::cout << "Gonderici: Frame " << currentFrameIndex << " basarili bir sekilde gonderilmis. Siradaki frame'e geciliyor...\n\n";
+                listFrames->item(currentFrameIndex)->setText("Frame " + QString::number(currentFrameIndex + 1) + ": Gönderildi");
                 expectedAck = !expectedAck;
                 currentFrameIndex++;
                 int progress = static_cast<int>((currentFrameIndex / static_cast<double>(listFrames->count())) * 100);
@@ -442,3 +341,51 @@ void MainWindow::on_simulationStep() {
     }
 
 }
+
+void MainWindow::send_checksum(){
+    std::cout << "Tum frameler basariyla gonderildi. Checksum frame'i gonderiliyor...\n\n";
+    txtSenderLog->append("Tum frameler basariyla gonderildi. Checksum frame'i gonderiliyor...");
+
+    std::cout << "Gonderici: Checksum gonderiliyor...\n";
+    txtSenderLog->append("Checksum gonderiliyor..." );
+
+    uint16_t sum = compute_checksum(frameData);
+    uint16_t checksumValue = ~sum;  // Checksum: 1’s complement
+
+    uint16_t receivedChecksum = checksumValue;
+
+    // Simulate checksum error
+    if (simulate_checksum_error()) {
+        int bitToFlip = rand() % 16;
+        receivedChecksum ^= (1 << bitToFlip);  // Bit tersleniyor
+        std::cout << "Checksum bozuldu! Bit " << bitToFlip << " terslendi.\n";
+    }
+
+    uint16_t recomputedSum = compute_checksum(frameData);
+    uint32_t total = receivedChecksum + recomputedSum;
+
+    if ((total & 0xFFFF) == 0xFFFF) {
+        std::cout << "Alici: Gonderilen checksum dogru. Gonderim tamamlandi.\n";
+        txtReceiverLog->append("Gonderilen checksum dogru. Gonderim tamamlandi.");
+    } else {
+        std::cout << "Alici: Checksum hatali. Tum frameler tekrar gonderilecek!\n";
+        txtReceiverLog->append("Checksum hatali. Tum frameler tekrar gonderilecek!");
+        std::cout << "Received checksum: " << receivedChecksum
+                  << " --- computed checksum: " << recomputedSum
+                  << " --- Total: " << total << "\n";
+
+        for (int i = 0; i < frameData.size(); ++i) {
+            QString status = "Frame " + QString::number(i + 1) + ": tekrar gonderilecek";
+            listFrames->item(i)->setText(status);
+        }
+
+        currentFrameIndex = 0;
+    }
+
+
+
+}
+
+
+
+

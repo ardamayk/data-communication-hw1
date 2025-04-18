@@ -31,6 +31,7 @@ private slots:
     void on_btnStartSim_clicked();
     void on_btnPauseSim_clicked();
     void on_simulationStep();
+    void send_checksum();
 
 private:
 
