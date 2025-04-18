@@ -238,17 +238,20 @@ void MainWindow::on_btnSelectFile_clicked() {
         for (size_t i = 0; i < frameData.size(); ++i) {
             std::vector<bool> crcBits = compute_crc16(frameData[i]);
             uint16_t crcValue = vector_to_uint16(crcBits);
+            QString crcHex = QString::number(crcValue, 16).toUpper().rightJustified(4, '0');
             listFrames->addItem("Frame " + QString::number(i + 1) + ": Hazır");
-            listCRC->addItem("Frame " + QString::number(i + 1) + " CRC: 0x" + QString::number(crcValue, 16).toUpper());
+            listCRC->addItem("Frame " + QString::number(i + 1) + " CRC: 0x" + crcHex);
             frameResults.push_back("Hazır");
         }
 
-        // Checksum hesapla
+        // Checksum hesapla ve 16-bit olarak göster
         checksum = compute_checksum(frameData);
-        lblChecksum->setText("Checksum: 0x" + QString::number(checksum, 16).toUpper());
-        txtReceiverLog->append("[Checksum] Hesaplandı: 0x" + QString::number(checksum, 16).toUpper());
+        QString checksumHex = QString::number(checksum, 16).toUpper().rightJustified(4, '0');
+        lblChecksum->setText("Checksum: 0x" + checksumHex);
+        txtReceiverLog->append("[Checksum] Hesaplandı: 0x" + checksumHex);
     }
 }
+
 
 void MainWindow::on_btnStartSim_clicked() {
     txtSenderLog->append("[Simülasyon] Başlatıldı.");
