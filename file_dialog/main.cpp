@@ -102,7 +102,7 @@ std::vector<bool> compute_crc16(std::vector<bool>& bits){
     std::vector<bool> crcVector;
     int k;
     for(k=15; k>=0; k--)
-        crcVector.push_back((crc >> i) & 1);
+        crcVector.push_back((crc >> k) & 1);
     //std::cout << "CRC vektoru hazir. vektor donduruluyor...";
     return crcVector;
 }
@@ -245,6 +245,8 @@ void transmission(const std::vector<std::vector<bool>>& frames, std::vector<bool
 
     }
 
+
+    //sending checksum
     std::cout << "Tum frameler basariyla gonderildi. Checksum frame'i gonderiliyor...\n\n";
     boolean checksumSent = false;
     while(!checksumSent){
