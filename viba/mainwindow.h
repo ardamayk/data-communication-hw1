@@ -23,7 +23,6 @@ class MainWindow : public QMainWindow
 public:
     MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
-    std::vector<std::vector<bool>> parcala_ve_kaydet(const std::string& dosya_yolu);
 
 
 private slots:
@@ -34,7 +33,7 @@ private slots:
     void send_checksum();
 
 private:
-
+    std::vector<std::vector<bool>> parcala_ve_kaydet(const std::string& dosya_yolu);
     void resetSimulation();
 
     QWidget *centralWidget;

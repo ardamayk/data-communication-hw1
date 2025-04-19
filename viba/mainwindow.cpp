@@ -97,12 +97,83 @@ bool simulate_frame_corrupt() { return rand() % 100 < 20; }
 bool simulate_ack_loss()      { return rand() % 100 < 15; }
 bool simulate_checksum_error(){ return rand() % 100 < 5; }
 
+
 std::vector<bool> compute_crc16(std::vector<bool>& bits){
+    /*std::cout << "Islenen parca: ";
+    for(bool bit: bits){
+        std::cout << bit;
+    }*/
+    const std::vector<bool> DLE = {0,0,0,1,0,0,0,0}; // 0x10
+    const std::vector<bool> STX = {0,0,0,0,0,0,1,0}; // 0x02
+    const std::vector<bool> ETX = {0,0,0,0,0,0,1,1}; // 0x03
+
+    size_t i = 0, j;
+    bool startFound = false, isDLE, isStuffedDLE, isSTX, isETX, reachedEnd = false;
+    // first, we need to find where the data starts.
+    //std::cout << "\nIlgili frame'in baslangic noktasi bulunuyor...\n";
+    while((i+16) <= bits.size() && !startFound){
+        isDLE = std::equal(bits.begin() + i, bits.begin() + i + 8, DLE.begin());
+        isSTX = std::equal(bits.begin() + i + 8, bits.begin() + i + 16, STX.begin());
+        startFound = (isDLE & isSTX);
+        if(!startFound){
+            i++;
+        }
+        else{
+            i += 16;
+        }
+    }
+    //std::cout << "Frame'in baslangic noktasi: " << i << "\n";
+    //after this while loop, we know the start point of the data
+    std::vector<bool> data;
+    //std::cout<< "Datalar ayristiriliyor...\n" << "Frame boyutu: " << bits.size() << ", Islenen indisler: ";
+    while((i+8) <= bits.size() && !reachedEnd){
+        //std::cout << i << "  ";
+        isDLE = true;
+        for(j=0; j<8 && isDLE; j++) {
+            if(bits[i+j] != DLE[j]){
+                isDLE = false;
+            }
+        }
+        if(isDLE && (i+16) <= bits.size()){
+            //std::cout << "DLE bulundu! ";
+            isETX = true;
+            isStuffedDLE = true;
+            for(j=0; j<8; j++){
+                if(bits[i+j+8] != ETX[j]){
+                    isETX = false;
+                    //std::cout << "DLE'den sonra ETX gelmiyor... ";
+                }
+                if(bits[i+j+8] != DLE[j]){
+                    isStuffedDLE = false;
+                    //std::cout << "DLE'den sonra tekrar DLE gelmiyor... ";
+                }
+            }
+            if(isETX){
+                //std::cout << "DLE sonrasi ETX bulundu! ";
+                reachedEnd = true;
+            }
+            else if(isStuffedDLE){
+                for(bool bit: DLE){
+                    data.push_back(bit);
+                }
+                i+=16;
+            }
+            else{
+                data.push_back(bits[i]);
+                i++;
+            }
+        }
+        else{
+            data.push_back(bits[i]);
+            i++;
+        }
+    }
+    //std::cout << "While dongusunden cikildi.\n";
+
     const uint16_t polynomial = 0x1021;
     uint16_t crc = 0xFFFF; //initial value for crc
     bool msb;
-    int i;
-    for(bool bit: bits){
+    for(bool bit: data){
         msb = (crc & 0x8000) != 0; // get the msb
         crc <<= 1;
         crc |= bit;
@@ -110,9 +181,12 @@ std::vector<bool> compute_crc16(std::vector<bool>& bits){
             crc ^= polynomial;
         }
     }
+    //std::cout << "CRC vektoru hazirlaniyor...\n";
     std::vector<bool> crcVector;
-    for(i=15; i>=0; i--)
+    int k;
+    for(k=15; k>=0; k--)
         crcVector.push_back((crc >> i) & 1);
+    //std::cout << "CRC vektoru hazir. vektor donduruluyor...";
     return crcVector;
 }
 
@@ -135,6 +209,77 @@ uint16_t compute_checksum(const std::vector<std::vector<bool>>& frames){
 
 
 
+void corrupt_frame_data(std::vector<bool>& frame){
+    const std::vector<bool> DLE = {0,0,0,1,0,0,0,0};
+    const std::vector<bool> STX = {0,0,0,0,0,0,1,0};
+    const std::vector<bool> ETX = {0,0,0,0,0,0,1,1};
+
+    size_t i = 0,j, corruptedIndex;
+    bool foundStart = false, isDLE, reachedEnd = false;
+    while(i+16<=frame.size() && !foundStart){
+        while (i + 16 <= frame.size() && !foundStart) {
+            if (std::equal(frame.begin() + i, frame.begin() + i + 8, DLE.begin()) &&
+                std::equal(frame.begin() + i + 8, frame.begin() + i + 16, STX.begin())) {
+                foundStart = true;
+                i += 16;
+            } else {
+                ++i;
+            }
+        }
+    }
+    std::vector<size_t> dataIndıces;
+
+    while((i+8) <= (frame.size()-16) && !reachedEnd){
+        isDLE = std::equal(frame.begin() + i, frame.begin() + i  + 8, DLE.begin());
+        if(isDLE && i+16 <= frame.size()){
+            std::vector<bool> nextByte(frame.begin() + i + 8, frame.begin() + i + 16);
+            if(nextByte == ETX){
+                reachedEnd = true;
+            }
+            else if(nextByte == DLE){
+                for(j=0;j<8;j++){
+                    dataIndıces.push_back(i+8+j);
+                }
+                i += 16;
+            }
+            else{
+                dataIndıces.push_back(i);
+                i++;
+            }
+        }
+        else{
+            dataIndıces.push_back(i);
+            i++;
+        }
+    }
+    if(!dataIndıces.empty()){
+        corruptedIndex = rand() % dataIndıces.size();
+        frame[dataIndıces[corruptedIndex]] = !frame[dataIndıces[corruptedIndex]];
+    }
+
+
+}
+
+
+std::vector<bool> create_checksum_frame(std::vector<std::vector<bool>>& frames){
+    uint16_t checksum;
+    uint16_t checksumComplement;
+    int i;
+
+    checksum = compute_checksum(frames);
+    checksumComplement = ~checksum;
+    checksumComplement++;
+
+    std::vector<bool> frame;
+    std::vector<bool> header = {1, 0, 1, 0}; // Example 4-bit header for transparency
+    frame.insert(frame.end(), header.begin(), header.end());
+
+    for(i= 15; i>= 0; i--)
+        frame.push_back((checksumComplement >> i) & 1);
+
+    return frame;
+}
+
 bool assure_crc(std::vector<bool>& frame){
     std::vector<bool> data(frame.begin(), frame.end() - 16);
     std::vector<bool> receivedCrc(frame.end() - 16, frame.end());
@@ -142,70 +287,76 @@ bool assure_crc(std::vector<bool>& frame){
     return (calculatedCrc == receivedCrc);
 }
 
-std::vector<std::vector<bool>> MainWindow::parcala_ve_kaydet(const std::string& dosya_yolu)  {
-    // Belirtilen dosya yolunu kullanarak bir giriş dosyası akışı (ifstream) nesnesi oluşturur.
-    // std::ios::binary: Dosyayı ikili modda açar, böylece baytlar olduğu gibi okunur.
-    // std::ios::ate: Dosya açıldığında okuma/yazma işaretçisini dosyanın sonuna konumlandırır.
-    std::ifstream dosya(dosya_yolu, std::ios::binary | std::ios::ate);
-
-    // Dosyanın başarıyla açılıp açılmadığını kontrol eder.
-    if (!dosya.is_open()) {
-        // Eğer dosya açılamazsa, bir hata mesajı standart hata akışına (cerr) yazdırılır.
-        std::cerr << "Dosya açılamadı!\n";
-        // Boş bir vektör döndürülerek işlemin başarısız olduğu belirtilir.
-        return {};
+std::vector<std::vector<bool>> MainWindow::parcala_ve_kaydet(const std::string& dosya_yolu) {
+    std::ifstream dosya(dosya_yolu, std::ios::binary | std::ios::ate); // Dosyayı binary ve sondan aç
+    if (!dosya.is_open()) { // Dosya açılamadıysa hata verip çık
+        std::cerr << "Dosya acilamadi!\n";
+        return {}; // Boş vektör döndür
     }
 
-    // Dosyanın sonundaki konumu alarak dosyanın toplam boyutunu (bayt cinsinden) belirler.
-    std::streamsize boyut = dosya.tellg();
-    // Okuma/yazma işaretçisini dosyanın başına geri konumlandırır, böylece dosyadan okuma işlemine baştan başlanabilir.
-    dosya.seekg(0, std::ios::beg);
+    std::streamsize boyut = dosya.tellg(); // Dosyanın toplam boyutunu al
+    dosya.seekg(0, std::ios::beg); // Dosyanın başına dön
 
-    // Dosyanın tüm bitlerini saklamak için bir boolean vektörü oluşturur.
-    std::vector<bool> bit_dizisi;
-    // Bit vektörünün boyutunu önceden ayırır. Her bayt 8 bit içerdiğinden, toplam bit sayısı dosya boyutunun 8 katıdır.
-    bit_dizisi.reserve(boyut * 8);
+    std::vector<bool> bit_dizisi; // Tüm bitleri tutacak dizi
+    bit_dizisi.reserve(boyut * 8); // Belleği önceden ayır (performans için)
 
-    // Dosyadan tek tek baytları okumak için bir karakter değişkeni tanımlar.
-    char byte;
-    // Dosyanın sonuna ulaşılana kadar bayt bayt okuma işlemi gerçekleştirir.
-    while (dosya.read(&byte, 1)) {
-        // Okunan karakteri işaretsiz bir karaktere (unsigned char) dönüştürür.
-        // Bu, bit kaydırma işlemlerinde taşma sorunlarını önler.
-        unsigned char b = static_cast<unsigned char>(byte);
-        // Okunan her bir baytın 8 bitini tek tek işlemek için bir döngü başlatır.
-        // Bitler en yüksek anlamlı bitten (7) en düşük anlamlı bite (0) doğru işlenir.
-        for (int i = 7; i >= 0; --i) {
-            // Bitwise AND operatörü (&) ve sağa kaydırma operatörü (>>) kullanarak baytın i-inci bitini kontrol eder.
-            // Eğer i-inci bit 1 ise, sonuç 1 (true), aksi takdirde 0 (false) olur.
-            bool bit = (b >> i) & 1;
-            // Elde edilen bit değerini bit dizisine ekler.
-            bit_dizisi.push_back(bit);
+    char byte; // Her okunan baytı geçici olarak tutacak değişken
+    while (dosya.read(&byte, 1)) { // Dosyadan byte byte oku
+        unsigned char b = static_cast<unsigned char>(byte); // Baytı işaretsiz yap (bit işlemleri için güvenli)
+        for (int i = 7; i >= 0; --i) { // Bayt içindeki bitleri çöz (MSB'den LSB'ye)
+            bool bit = (b >> i) & 1; // İlgili biti çıkar
+            bit_dizisi.push_back(bit); // Bit dizisine ekle
         }
     }
 
-    // Oluşturulan bit dizisini 100 bitlik parçalara ayırmak için bir vektör (matris) oluşturur.
-    std::vector<std::vector<bool>> matris;
-    // Bit dizisi üzerinde 100'lük adımlarla ilerleyen bir döngü başlatır.
-    for (size_t i = 0; i < bit_dizisi.size(); i += 100) {
-        // Her bir 100 bitlik parça için geçici bir boolean vektörü oluşturur.
-        std::vector<bool> parca;
-        // Mevcut parçanın başlangıç indeksinden itibaren 100 bit veya bit dizisinin sonuna kadar olan bitleri alır.
-        for (size_t j = i; j < i + 100 && j < bit_dizisi.size(); ++j) {
-            // Bit dizisindeki ilgili biti mevcut parçaya ekler.
-            parca.push_back(bit_dizisi[j]);
+    // DLE (0x10), STX (0x02), ETX (0x03) karakterlerinin bit dizileri
+    const std::vector<bool> DLE = {0,0,0,1,0,0,0,0};
+    const std::vector<bool> STX = {0,0,0,0,0,0,1,0};
+    const std::vector<bool> ETX = {0,0,0,0,0,0,1,1};
+
+    std::vector<std::vector<bool>> matris; // Frame'leri tutacak 2 boyutlu vektör
+
+    size_t i = 0; // bit_dizisi üzerinde ilerlemek için indeks
+    while (i < bit_dizisi.size()) { // Tüm bitler işlenene kadar döngü
+        std::vector<bool> frame; // Yeni frame oluştur
+        size_t remaining_bits = 100; // Bu frame'e eklenecek maksimum bit sayısı
+
+        frame.insert(frame.end(), DLE.begin(), DLE.end()); // Frame başına DLE ekle
+        frame.insert(frame.end(), STX.begin(), STX.end()); // Ardından STX ekle
+
+        // 8 bitlik blokları işle
+        while (remaining_bits >= 8 && i + 8 <= bit_dizisi.size()) {
+            std::vector<bool> blok(bit_dizisi.begin() + i, bit_dizisi.begin() + i + 8); // 8 bitlik blok al
+            i += 8; // i'yi 8 ileri al
+
+            if (blok == DLE) { // Eğer blok DLE ile aynıysa
+                frame.insert(frame.end(), DLE.begin(), DLE.end()); // Ekstra DLE ekle (stuffing)
+                remaining_bits -= 8; // Toplam 100 bitten 8 bit azalt
+            }
+
+            frame.insert(frame.end(), blok.begin(), blok.end()); // Bloğu frame'e ekle
+            remaining_bits -= 8; // Kalan veri kapasitesini azalt
         }
-        std::vector<bool> crc = compute_crc16(parca);
-        parca.insert(parca.end(), crc.begin(), crc.end());
 
+        // Geriye kalan 0-7 arası bit varsa, onları direkt ekle
+        if (remaining_bits > 0 && i < bit_dizisi.size()) {
+            size_t bit_to_add = std::min(remaining_bits, bit_dizisi.size() - i); // Eklenebilecek maksimum bit sayısı
+            frame.insert(frame.end(), bit_dizisi.begin() + i, bit_dizisi.begin() + i + bit_to_add); // Kalan bitleri ekle
+            i += bit_to_add; // İndeksi ilerlet
+        }
 
-        // Oluşturulan parçayı (vektörü) sonuç matrisine ekler.
-        matris.push_back(parca);
+        frame.insert(frame.end(), DLE.begin(), DLE.end()); // Frame sonuna DLE ekle
+        frame.insert(frame.end(), ETX.begin(), ETX.end()); // Ardından ETX ekle
+        //std::cout << "crc hesabina baslaniliyor...\n";
+        std::vector<bool> crc = compute_crc16(frame);
+        frame.insert(frame.end(), crc.begin(), crc.end());
+
+        matris.push_back(frame); // Oluşturulan frame'i matrise ekle
     }
 
-    // Oluşturulan parçaların bulunduğu matrisi döndürür.
-    return matris;
+    return matris; // Tüm frame'leri içeren matrisi döndür
 }
+
 
 
 uint16_t vector_to_uint16(const std::vector<bool>& vec) {
@@ -302,9 +453,7 @@ void MainWindow::on_simulationStep() {
             std::cout << "Alici: Frame " << currentFrameIndex << " teslim alindi.\n";
             std::vector<bool> receivedFrame = framesCopy[currentFrameIndex];
             if(simulate_frame_corrupt()) { // frame bozulduysa
-                corruptedIndex = rand() % receivedFrame.size();
-                receivedFrame[corruptedIndex] = !receivedFrame[corruptedIndex]; // bozulmasına karar verilen indexteki bit ters çevirilir
-
+                corrupt_frame_data(receivedFrame);
             }
             if(assure_crc(receivedFrame)){ // crc is the same
                 ackSent = expectedAck;
