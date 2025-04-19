@@ -185,7 +185,7 @@ std::vector<bool> compute_crc16(std::vector<bool>& bits){
     std::vector<bool> crcVector;
     int k;
     for(k=15; k>=0; k--)
-        crcVector.push_back((crc >> i) & 1);
+        crcVector.push_back((crc >> k) & 1);
     //std::cout << "CRC vektoru hazir. vektor donduruluyor...";
     return crcVector;
 }
@@ -227,7 +227,7 @@ void corrupt_frame_data(std::vector<bool>& frame){
             }
         }
     }
-    std::vector<size_t> dataIndıces;
+    std::vector<size_t> dataIndices;
 
     while((i+8) <= (frame.size()-16) && !reachedEnd){
         isDLE = std::equal(frame.begin() + i, frame.begin() + i  + 8, DLE.begin());
@@ -238,23 +238,23 @@ void corrupt_frame_data(std::vector<bool>& frame){
             }
             else if(nextByte == DLE){
                 for(j=0;j<8;j++){
-                    dataIndıces.push_back(i+8+j);
+                    dataIndices.push_back(i+8+j);
                 }
                 i += 16;
             }
             else{
-                dataIndıces.push_back(i);
+                dataIndices.push_back(i);
                 i++;
             }
         }
         else{
-            dataIndıces.push_back(i);
+            dataIndices.push_back(i);
             i++;
         }
     }
-    if(!dataIndıces.empty()){
-        corruptedIndex = rand() % dataIndıces.size();
-        frame[dataIndıces[corruptedIndex]] = !frame[dataIndıces[corruptedIndex]];
+    if(!dataIndices.empty()){
+        corruptedIndex = rand() % dataIndices.size();
+        frame[dataIndices[corruptedIndex]] = !frame[dataIndices[corruptedIndex]];
     }
 
 
