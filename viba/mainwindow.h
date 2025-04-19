@@ -33,7 +33,7 @@ private slots:
     void send_checksum();
 
 private:
-    std::vector<std::vector<bool>> parcala_ve_kaydet(const std::string& dosya_yolu);
+
     void resetSimulation();
 
     QWidget *centralWidget;
