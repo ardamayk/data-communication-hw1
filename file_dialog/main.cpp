@@ -269,10 +269,11 @@ void transmission(const std::vector<std::vector<bool>>& frames, std::vector<bool
         if((total & 0xFFFF) == 0x0000){
             std::cout << "Alici: Gonderilen checksum dogru. Gonderim tamamlandi.\n";
             checksumSent = true;
+             std::cout << "2'ye tumleyeni alinmis, teslim alinan checksum: " << receivedChecksumValue << " --- Hesaplanan checksum: " << computedChecksum << " --- Toplam: " << total << "\n";
         }
         else {
             std::cout << "Alici: Checksum hatali. Tekrar gonderim yapilacak...\n";
-            std::cout << "Received checksum: " << receivedChecksumValue << " --- computed checksum: " << computedChecksum << "Total: " << total << "\n";
+            std::cout << "2'ye tumleyeni alinmis, teslim alinan checksum: " << receivedChecksumValue << " --- Hesaplanan checksum: " << computedChecksum << " --- Toplam: " << total << "\n";
         }
     }
 
