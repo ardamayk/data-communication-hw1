@@ -252,10 +252,10 @@ void transmission(const std::vector<std::vector<bool>>& frames, std::vector<bool
     while(!checksumSent){
         std::cout << "Gonderici: Checksum gonderiliyor...\n";
         std::vector<bool> checksumCopy = checksumFrame;
-        /*if(simulate_checksum_error()){
+        if(simulate_checksum_error()){
             int checksumCorruptedIndex = rand() % checksumCopy.size();
             checksumCopy[checksumCorruptedIndex] = !checksumCopy[checksumCorruptedIndex];
-        }*/
+        }
         std::vector<bool> receivedChecksum(checksumCopy.begin() + 4, checksumCopy.end());
         uint16_t receivedChecksumValue = 0;
         for(bool bit: receivedChecksum){
