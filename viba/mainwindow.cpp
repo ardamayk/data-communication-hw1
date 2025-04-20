@@ -7,6 +7,7 @@
 
 std::vector<std::vector<bool>> globalFrameData;
 std::vector<bool> checksumFrame;
+std::vector<std::vector<bool>> global_crc_list;
 
 
 MainWindow::MainWindow(QWidget *parent)
@@ -352,8 +353,15 @@ std::vector<std::vector<bool>> parcala_ve_kaydet(const std::string& dosya_yolu) 
         frame.insert(frame.end(), ETX.begin(), ETX.end()); // Ardından ETX ekle
         //std::cout << "crc hesabina baslaniliyor...\n";
         std::vector<bool> crc = compute_crc16(frame);
+        /*
+        std::cout << "CRC bits: ";
+        for (bool bit : crc) {
+            std::cout << bit;
+        }
+        std::cout << std::endl;
+        */
+        global_crc_list.push_back(crc);       // CRC değerini global listeye ekle
         frame.insert(frame.end(), crc.begin(), crc.end());
-
         matris.push_back(frame); // Oluşturulan frame'i matrise ekle
     }
 
@@ -379,7 +387,7 @@ void MainWindow::on_btnSelectFile_clicked() {
 
         listFrames->clear();
         listCRC->clear();
-        frameResults.clear();
+
         currentFrameIndex = 0;
         progressBar->setValue(0);
         txtSenderLog->clear();
@@ -391,12 +399,13 @@ void MainWindow::on_btnSelectFile_clicked() {
         quint16 checksum = 0, checksumComplement;
 
         for (size_t i = 0; i < frameData.size(); ++i) {
-            std::vector<bool> crcBits = compute_crc16(frameData[i]);
+            // Global CRC listesinden al
+            std::vector<bool> crcBits = global_crc_list[i];
             uint16_t crcValue = vector_to_uint16(crcBits);
             QString crcHex = QString::number(crcValue, 16).toUpper().rightJustified(4, '0');
+
             listFrames->addItem("Frame " + QString::number(i + 1) + ": Hazır");
             listCRC->addItem("Frame " + QString::number(i + 1) + " CRC: 0x" + crcHex);
-            frameResults.push_back("Hazır");
         }
 
         // Checksum hesapla ve 16-bit olarak göster
