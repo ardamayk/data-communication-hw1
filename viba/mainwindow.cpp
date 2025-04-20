@@ -515,7 +515,10 @@ void MainWindow::send_checksum(){
         std::cout << "Gonderici: Checksum gonderiliyor...\n";
         txtSenderLog->append("Checksum gonderiliyor...");
         std::vector<bool> checksumCopy = checksumFrame;
-
+        if(simulate_checksum_error()){
+            int checksumCorruptedIndex =(rand() % checksumCopy.size()) + 4;
+            checksumCopy[checksumCorruptedIndex] = !checksumCopy[checksumCorruptedIndex];
+        }
 
 
         std::vector<bool> receivedChecksum(checksumCopy.begin() + 4, checksumCopy.end());
@@ -542,10 +545,10 @@ void MainWindow::send_checksum(){
                       << " --- Total: " << total << "\n";
 
             txtReceiverLog->append("Checksum hatali. Tekrar gonderim yapilacak...");
-            txtReceiverLog->append("Received checksum: 0x" +
+            txtReceiverLog->append("2'ye tümleyeni alınmış gönderilen checksum: 0x" +
                                    QString::number(receivedChecksumValue, 16).toUpper().rightJustified(4, '0') +
-                                   " --- Computed checksum: 0x" +
-                                   QString::number(computedChecksum, 16).toUpper().rightJustified(4, '0'));
+                                   " --- Hesaplanan checksum: 0x" +
+                                   QString::number(computedChecksum, 16).toUpper().rightJustified(4, '0') + " --- Toplam: 0x" + QString::number(total & 0xFFFF, 16).toUpper().rightJustified(4, '0'));
         }
     }
 }
