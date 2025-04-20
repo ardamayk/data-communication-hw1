@@ -6,6 +6,7 @@
 #include <QCoreApplication>
 
 std::vector<std::vector<bool>> globalFrameData;
+std::vector<bool> checksumFrame;
 
 
 MainWindow::MainWindow(QWidget *parent)
@@ -387,7 +388,7 @@ void MainWindow::on_btnSelectFile_clicked() {
         // Dosyayı parçala
         frameData = parcala_ve_kaydet(fileName.toStdString());
         globalFrameData = frameData;
-        quint16 checksum = 0;
+        quint16 checksum = 0, checksumComplement;
 
         for (size_t i = 0; i < frameData.size(); ++i) {
             std::vector<bool> crcBits = compute_crc16(frameData[i]);
@@ -399,10 +400,16 @@ void MainWindow::on_btnSelectFile_clicked() {
         }
 
         // Checksum hesapla ve 16-bit olarak göster
-        checksum = compute_checksum(frameData);
+        checksumFrame = create_checksum_frame(frameData);
+        for(bool bit: checksumFrame){
+            checksumComplement = (checksumComplement << 1) | bit;
+        }
+        checksum = (~checksumComplement) + 1;
         QString checksumHex = QString::number(checksum, 16).toUpper().rightJustified(4, '0');
+        QString checksumComplementHex = QString::number(checksumComplement, 16).toUpper().rightJustified(4, '0');
         lblChecksum->setText("Checksum: 0x" + checksumHex);
         txtReceiverLog->append("[Checksum] Hesaplandı: 0x" + checksumHex);
+        txtReceiverLog->append("Bu degerin 2'ye tümleyeni frame içinde karşı tarafa gönderilecektir. Checksum'un 2'ye tümleyeni: 0x" + checksumComplementHex);
     }
 }
 
@@ -501,14 +508,14 @@ void MainWindow::send_checksum(){
     txtSenderLog->append("Tum frameler basariyla gonderildi. Checksum frame'i gönderiliyor...");
     std::cout << "Tum frameler basariyla gonderildi. Checksum frame'i gönderiliyor...\n\n";
 
-    std::vector<bool> checksumFrame = create_checksum_frame(globalFrameData);
+
     bool checksumSent = false;
 
     while (!checksumSent) {
         std::cout << "Gonderici: Checksum gonderiliyor...\n";
         txtSenderLog->append("Checksum gonderiliyor...");
-
         std::vector<bool> checksumCopy = checksumFrame;
+
 
 
         std::vector<bool> receivedChecksum(checksumCopy.begin() + 4, checksumCopy.end());
@@ -523,6 +530,10 @@ void MainWindow::send_checksum(){
         if ((total & 0xFFFF) == 0x0000) {
             std::cout << "Alici: Gonderilen checksum dogru. Gonderim tamamlandı.\n";
             txtReceiverLog->append("Alici: Gonderilen checksum dogru. Gonderim tamamlandı.");
+            txtReceiverLog->append("2'ye tümleyeni alınmış gönderilen checksum: 0x" +
+                                  QString::number(receivedChecksumValue, 16).toUpper().rightJustified(4, '0') +
+                                   " --- Hesaplanan checksum: 0x" +
+                                  QString::number(computedChecksum, 16).toUpper().rightJustified(4, '0') + " --- Toplam: 0x" + QString::number(total & 0xFFFF, 16).toUpper().rightJustified(4, '0'));
             checksumSent = true;
         } else {
             std::cout << "Alici: Checksum hatali. Tekrar gonderim yapilacak...\n";
